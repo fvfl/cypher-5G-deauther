@@ -195,7 +195,10 @@ void checkScanComplete() {
 
   // Restore AP — scanning takes the radio out of AP mode on RTL8720DN
   WiFi.apbegin((char *)ap_ssid, (char *)ap_pass, (char *)String(current_channel).c_str());
+  server.stop();
+  server.setBlockingMode();
   server.begin();
+  server.setTimeout(10);
 
   if (scan_results.size() == 0) {
     appState = STATE_MAIN_MENU;
@@ -784,8 +787,7 @@ void drawInfo() {
   drawStatusBar("INFO");
 
   display.setCursor(4, 13);
-  display.print("IP: ");
-  display.print(WiFi.localIP());
+  display.print("IP: 192.168.1.1");
 
   display.setCursor(4, 23);
   display.print("Nets: ");
@@ -888,17 +890,17 @@ void handleWebClient() {
   WiFiClient client = server.available();
   if (!client) return;
 
-  // Read request line with timeout
-  unsigned long timeout = millis() + 300;
-  while (!client.available() && millis() < timeout) { /* spin */ }
-
   String req = "";
-  while (client.available()) {
-    char c = client.read();
-    if (c == '\n') break;
-    if (c != '\r') req += c;
+  unsigned long deadline = millis() + 1500;
+  while (client.connected() && millis() < deadline) {
+    if (client.available()) {
+      char c = client.read();
+      if (c == '\n') break;
+      if (c != '\r') req += c;
+    }
   }
-  while (client.available()) client.read();  // drain headers
+  unsigned long drain = millis() + 200;
+  while (client.available() && millis() < drain) client.read();
 
   if (req.indexOf("GET / ") >= 0 || req.indexOf("GET /index") >= 0) {
     client.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"));
@@ -993,7 +995,9 @@ void setup() {
   DEBUG_SER_INIT();
 
   WiFi.apbegin((char *)ap_ssid, (char *)ap_pass, (char *)String(current_channel).c_str());
+  server.setBlockingMode();
   server.begin();
+  server.setTimeout(10);
 
   delay(1000);  // let title screen sit a moment
   appState = STATE_MAIN_MENU;
